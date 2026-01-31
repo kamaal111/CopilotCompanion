@@ -7,10 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		2C0F03022F2E90280058609D /* CopilotCompanion.xctestplan in Resources */ = {isa = PBXBuildFile; fileRef = 2C0F03012F2E90280058609D /* CopilotCompanion.xctestplan */; };
 		2CFBE3C72F2E64EE0056A332 /* CopilotCompanionApp in Frameworks */ = {isa = PBXBuildFile; productRef = 2CFBE3C62F2E64EE0056A332 /* CopilotCompanionApp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		2C0F03012F2E90280058609D /* CopilotCompanion.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = CopilotCompanion.xctestplan; sourceTree = "<group>"; };
 		2CFBE3B62F2E62640056A332 /* CopilotCompanion.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CopilotCompanion.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2CFBE3C42F2E62910056A332 /* CopilotCompanionApp */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = CopilotCompanionApp; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -39,6 +41,7 @@
 			isa = PBXGroup;
 			children = (
 				2CFBE3C42F2E62910056A332 /* CopilotCompanionApp */,
+				2C0F03012F2E90280058609D /* CopilotCompanion.xctestplan */,
 				2CFBE3B82F2E62640056A332 /* CopilotCompanion */,
 				2CFBE3C52F2E64EE0056A332 /* Frameworks */,
 				2CFBE3B72F2E62640056A332 /* Products */,
@@ -125,6 +128,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2C0F03022F2E90280058609D /* CopilotCompanion.xctestplan in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

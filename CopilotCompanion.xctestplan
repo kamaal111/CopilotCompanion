@@ -1,0 +1,24 @@
+{
+  "configurations" : [
+    {
+      "id" : "F2685ED7-7BA8-4C73-9033-FBC8EFEEAC5D",
+      "name" : "Configuration 1",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "testTimeoutsEnabled" : true
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:CopilotCompanionApp",
+        "identifier" : "CopilotCompanionAppTests",
+        "name" : "CopilotCompanionAppTests"
+      }
+    }
+  ],
+  "version" : 1
+}

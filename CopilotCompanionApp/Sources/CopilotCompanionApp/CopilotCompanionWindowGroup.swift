@@ -8,11 +8,11 @@
 import SwiftUI
 
 public struct CopilotCompanionWindowGroup: Scene {
-    public init() { }
+    public init() {}
 
     public var body: some Scene {
         WindowGroup {
-            Text("Hello world!")
+            ContentView()
         }
     }
 }

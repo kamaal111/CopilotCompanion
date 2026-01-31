@@ -5,11 +5,15 @@ import PackageDescription
 
 let package = Package(
     name: "CopilotCompanionApp",
-    platforms: [.macOS(.v11)],
+    platforms: [.macOS(.v13)],
     products: [
-        .library(name: "CopilotCompanionApp", targets: ["CopilotCompanionApp"]),
+        .library(name: "CopilotCompanionApp", targets: ["CopilotCompanionApp"])
     ],
     targets: [
         .target(name: "CopilotCompanionApp"),
+        .testTarget(
+            name: "CopilotCompanionAppTests",
+            dependencies: ["CopilotCompanionApp"]
+        ),
     ]
 )

@@ -1,128 +1,100 @@
-# FolderWatcher
+# CopilotCompanionApp (Swift Package)
 
-A Swift utility for monitoring file system changes in a folder and its subdirectories.
+Utilities for monitoring GitHub Copilot local session state on macOS. Includes file system watching, JSONL parsing, and analysis helpers used by the Copilot Companion app.
 
 ## Features
 
-- 🔍 **Real-time Monitoring**: Automatically detects file and folder changes
-- 📁 **Recursive Watching**: Monitors all subdirectories and nested files  
-- 🎯 **Change Types**: Detects creation, modification, deletion, and rename events
-- ⚡ **Async/Await**: Built with modern Swift concurrency
-- 🧪 **Well Tested**: Comprehensive test suite using Swift Testing
-- 🔄 **Background Processing**: Uses DispatchSource for efficient file system monitoring
+- FolderWatcher: Actor that detects created/modified/deleted items recursively.
+- SessionWatcher: Debounced watcher for new sessions requiring attention.
+- SessionManager: Discovers active sessions in `~/.copilot/session-state`.
+- JSONLParser: Parses `events.jsonl` lines into strongly typed events.
+- SessionStateAnalyzer: Derives session status (e.g., waiting for user/approval).
+- WorkspaceInfoParser: Reads workspace metadata from `workspace.yaml`.
+
+## Requirements
+
+- macOS 13+
+- Swift 6.2+
+
+## Install
+
+Add this package to an Xcode project or include it in a SwiftPM workspace. This repository also contains a macOS host app that imports this library.
 
 ## Usage
 
-### Basic Example
+### Watch filesystem changes
 
 ```swift
 import CopilotCompanionApp
 
-// Create a watcher for a specific folder
 let folderURL = URL(fileURLWithPath: "/path/to/watch")
 let watcher = FolderWatcher(folderURL: folderURL)
 
-// Start watching with a callback
 try await watcher.startWatching { change in
-    print("Change detected:")
-    print("  Type: \(change.type)")
-    print("  Path: \(change.path)")
-    print("  Time: \(change.timestamp)")
+    print("[\(change.timestamp)] \(change.type) => \(change.path.path)")
 }
 
-// Later, stop watching
+// ... later
 await watcher.stopWatching()
 ```
 
-### Manual Change Checking
+Key types:
+- `FolderWatcherChangeType`: `.created`, `.modified`, `.deleted`, `.renamed`
+- `FolderWatcherChange`: `{ path: URL, type: FolderWatcherChangeType, timestamp: Date }`
 
-For testing or manual polling:
+You can also poll manually:
 
 ```swift
-let watcher = FolderWatcher(folderURL: folderURL)
 try await watcher.startWatching { _ in }
-
-// ... perform file operations ...
-
-// Manually check for changes
 let changes = try await watcher.checkForChanges()
-for change in changes {
-    print("\(change.type): \(change.path.lastPathComponent)")
-}
 ```
 
-### Change Types
+### Monitor Copilot sessions
 
 ```swift
-public enum ChangeType: Sendable {
-    case created   // New file or folder
-    case modified  // Existing file modified
-    case deleted   // File or folder removed
-    case renamed   // File or folder renamed
-}
-```
+import CopilotCompanionApp
 
-### Change Object
+let sessionManager = SessionManager() // defaults to ~/.copilot/session-state
+let sessionsDir = FileManager.default.homeDirectoryForCurrentUser
+    .appendingPathComponent(".copilot/session-state")
+let folderWatcher = FolderWatcher(folderURL: sessionsDir)
+let sessionWatcher = SessionWatcher(sessionManager: sessionManager, folderWatcher: folderWatcher)
 
-```swift
-public struct Change: Sendable {
-    public let path: URL          // Full path to the changed item
-    public let type: ChangeType   // Type of change
-    public let timestamp: Date    // When the change was detected
-}
-```
-
-## Error Handling
-
-```swift
-do {
-    try await watcher.startWatching { change in
-        // Handle change
+try await sessionWatcher.startWatching { sessions in
+    // New or updated sessions that need user attention since watch start
+    for s in sessions {
+        print("\(s.projectName) [\(s.shortId)]: \(s.state.status.displayName) \(s.state.reason)")
     }
-} catch FolderWatcherError.folderDoesNotExist {
-    print("The folder does not exist")
-} catch FolderWatcherError.cannotOpenFolder {
-    print("Cannot open the folder for watching")
-} catch {
-    print("Unexpected error: \(error)")
 }
+
+// ... later
+await sessionWatcher.stopWatching()
 ```
 
-## Implementation Details
+Session status values include: `.waitingForUser`, `.waitingForApproval`, `.processing`, `.userWaiting`, `.ready`, `.empty`, `.unknown`.
 
-- Uses `DispatchSource.makeFileSystemObjectSource` for efficient file system monitoring
-- Maintains snapshots of folder contents to detect changes
-- Automatically handles symbolic links (e.g., `/var` → `/private/var` on macOS)
-- Filters out temporary system files
-- Thread-safe using Swift's actor isolation
+## Errors
 
-## Testing
+`FolderWatcher` throws:
+- `.folderDoesNotExist`: Path missing or not a directory
+- `.cannotOpenFolder`: Failed to open directory for events
+- `.cannotEnumerateFolder`: Failed to list contents
 
-The FolderWatcher includes a comprehensive test suite that verifies:
+## Development
 
-- ✅ File creation detection
-- ✅ File modification detection  
-- ✅ File deletion detection
-- ✅ Subdirectory changes
-- ✅ Multiple simultaneous changes
-- ✅ Callback triggering
-- ✅ Start/stop/restart functionality
-- ✅ Error handling for invalid folders
-- ✅ Timestamp accuracy
-
-Run tests with:
+From the repo root, use `just` tasks:
 
 ```bash
-swift test
+# Run SwiftPM tests for this package
+just spm-test CopilotCompanionApp
+
+# Open Xcode project (includes macOS app wrapper)
+just open
 ```
 
-All tests use isolated temporary directories to ensure no side effects.
+Tests use Swift Testing (`import Testing`) and temporary directories; no real user data is read.
 
-## Requirements
+## Security Notes
 
-- macOS 13.0+
-- Swift 6.2+
-
-## License
-
-Created by Kamaal M Farah on 1/31/26.
+- The app/library reads from `~/.copilot/session-state`. Do not commit real user data.
+- Avoid embedding absolute local paths in code or tests.

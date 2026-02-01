@@ -8,16 +8,14 @@
 import SwiftUI
 
 struct ContentView: View {
-    @State private var watcher: FolderWatcher?
+    @State private var sessionWatcher: SessionWatcher?
     @State private var isWatching = false
-    @State private var changes: [FolderWatcherChange] = []
+    @State private var sessionsWaitingForUser: [CopilotSession] = []
     @State private var errorMessage: String?
 
     var body: some View {
         VStack(spacing: 20) {
-            Text("Copilot Folder Watcher")
-                .font(.title)
-                .padding()
+            headerView
 
             if let errorMessage {
                 Text(errorMessage)
@@ -39,37 +37,117 @@ struct ContentView: View {
 
             Divider()
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 10) {
-                    if changes.isEmpty {
-                        Text("No changes detected yet")
-                            .foregroundColor(.secondary)
-                            .padding()
-                    } else {
-                        ForEach(Array(changes.enumerated()), id: \.offset) { index, change in
-                            HStack {
-                                Image(systemName: iconForChangeType(change.type))
-                                    .foregroundColor(colorForChangeType(change.type))
-                                VStack(alignment: .leading) {
-                                    Text(change.path.lastPathComponent)
-                                        .font(.headline)
-                                    Text(formatDate(change.timestamp))
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                            .padding(8)
-                            .background(Color.secondary.opacity(0.1))
-                            .cornerRadius(8)
-                        }
-                    }
-                }
-                .padding()
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            sessionListView
         }
         .frame(minWidth: 500, minHeight: 400)
         .padding()
+    }
+
+    private var headerView: some View {
+        HStack {
+            Text("🤖 Copilot Session Monitor")
+                .font(.title)
+
+            Spacer()
+
+            if !sessionsWaitingForUser.isEmpty {
+                HStack(spacing: 4) {
+                    Text("🔔")
+                    Text("\(sessionsWaitingForUser.count)")
+                        .fontWeight(.bold)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color.orange.opacity(0.2))
+                .cornerRadius(12)
+            }
+        }
+        .padding()
+    }
+
+    private var sessionListView: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                if sessionsWaitingForUser.isEmpty {
+                    emptyStateView
+                } else {
+                    ForEach(sessionsWaitingForUser) { session in
+                        sessionCard(for: session)
+                    }
+                }
+            }
+            .padding()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var emptyStateView: some View {
+        VStack(spacing: 12) {
+            Text("✅")
+                .font(.system(size: 48))
+            Text("No sessions waiting for your input")
+                .font(.headline)
+                .foregroundColor(.secondary)
+            if isWatching {
+                Text("We'll update automatically when Copilot needs you")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 40)
+    }
+
+    private func sessionCard(for session: CopilotSession) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(session.state.status.emoji)
+                    .font(.title2)
+                Text(session.projectName)
+                    .font(.headline)
+                Spacer()
+                Text(formatDate(session.lastModified))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            Text(session.shortId)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+
+            if let summary = session.workspace?.summary, !summary.isEmpty {
+                Text(summary)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .lineLimit(2)
+            }
+
+            if let lastMessage = session.state.lastMessage, !lastMessage.isEmpty {
+                Text("\"\(lastMessage)\"")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .lineLimit(2)
+                    .italic()
+            }
+
+            HStack {
+                Label("\(session.eventCount) events", systemImage: "list.bullet")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Text(session.state.reason)
+                    .font(.caption2)
+                    .foregroundColor(.orange)
+            }
+        }
+        .padding(12)
+        .background(Color.orange.opacity(0.1))
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+        )
     }
 
     private func toggleWatching() {
@@ -97,20 +175,20 @@ struct ContentView: View {
             }
         }
 
+        let manager = SessionManager(sessionStateDirectory: copilotConfigDirectory)
         let folderWatcher = FolderWatcher(folderURL: copilotConfigDirectory)
+        let watcher = SessionWatcher(sessionManager: manager, folderWatcher: folderWatcher)
 
         Task {
             do {
-                try await folderWatcher.startWatching { change in
+                try await watcher.startWatching { sessions in
                     await MainActor.run {
-                        changes.insert(change, at: 0)
-                        if changes.count > 50 {
-                            changes.removeLast()
-                        }
+                        self.sessionsWaitingForUser = sessions
                     }
                 }
+
                 await MainActor.run {
-                    self.watcher = folderWatcher
+                    self.sessionWatcher = watcher
                     self.isWatching = true
                     self.errorMessage = nil
                 }
@@ -124,29 +202,12 @@ struct ContentView: View {
 
     private func stopWatching() {
         Task {
-            await watcher?.stopWatching()
+            await sessionWatcher?.stopWatching()
             await MainActor.run {
-                self.watcher = nil
+                self.sessionWatcher = nil
                 self.isWatching = false
+                self.sessionsWaitingForUser = []
             }
-        }
-    }
-
-    private func iconForChangeType(_ type: FolderWatcherChangeType) -> String {
-        switch type {
-        case .created: return "plus.circle.fill"
-        case .modified: return "pencil.circle.fill"
-        case .deleted: return "minus.circle.fill"
-        case .renamed: return "arrow.triangle.2.circlepath"
-        }
-    }
-
-    private func colorForChangeType(_ type: FolderWatcherChangeType) -> Color {
-        switch type {
-        case .created: return .green
-        case .modified: return .blue
-        case .deleted: return .red
-        case .renamed: return .orange
         }
     }
 
@@ -157,7 +218,6 @@ struct ContentView: View {
         return formatter.string(from: date)
     }
 }
-
 
 #Preview {
     ContentView()

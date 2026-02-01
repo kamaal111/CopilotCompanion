@@ -40,4 +40,3 @@ list-schemes:
 # Clean build artifacts (Xcode + SwiftPM)
 clean:
     xcodebuild -project {{ PROJECT }} -scheme {{ SCHEME }} clean
-    rm -rf {{ PKG_DIR }}/.build

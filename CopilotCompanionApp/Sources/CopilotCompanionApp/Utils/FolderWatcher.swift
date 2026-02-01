@@ -16,6 +16,7 @@ actor FolderWatcher {
     private var isWatching = false
     private var accumulatedChanges: [FolderWatcherChange] = []
     private var initialSnapshot: [String: FileAttributes] = [:]
+    private var pollingTask: Task<Void, Never>?
 
     init(folderURL: URL) {
         self.folderURL = folderURL
@@ -57,10 +58,16 @@ actor FolderWatcher {
         source.resume()
         self.dispatchSource = source
         self.isWatching = true
+
+        // Start polling task to detect file modifications
+        startPolling()
     }
 
     func stopWatching() {
         guard isWatching else { return }
+
+        pollingTask?.cancel()
+        pollingTask = nil
 
         dispatchSource?.cancel()
         dispatchSource = nil
@@ -103,6 +110,30 @@ actor FolderWatcher {
 
         let changes = detectChanges(from: initialSnapshot, to: currentSnapshot)
         accumulatedChanges.append(contentsOf: changes)
+        for change in changes {
+            await changeHandler?(change)
+        }
+    }
+
+    private func startPolling() {
+        pollingTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                await self?.pollForChanges()
+            }
+        }
+    }
+
+    private func pollForChanges() async {
+        guard isWatching else { return }
+        guard let currentSnapshot = try? captureSnapshot() else { return }
+
+        let changes = detectChanges(from: initialSnapshot, to: currentSnapshot)
+        guard !changes.isEmpty else { return }
+
+        initialSnapshot = currentSnapshot
+        accumulatedChanges.append(contentsOf: changes)
+
         for change in changes {
             await changeHandler?(change)
         }

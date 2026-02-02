@@ -5,31 +5,29 @@
 //  Created by Kamaal M Farah on 1/31/26.
 //
 
+import AppKit
 import SwiftUI
 
 struct ContentView: View {
-    @State private var sessionWatcher: SessionWatcher?
-    @State private var isWatching = false
-    @State private var sessionsWaitingForUser: [CopilotSession] = []
-    @State private var errorMessage: String?
+    @EnvironmentObject private var model: MenuBarModel
 
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 16) {
             headerView
 
-            if let errorMessage {
+            if let errorMessage = model.errorMessage {
                 Text(errorMessage)
                     .foregroundColor(.red)
                     .padding()
             }
 
-            Button(action: toggleWatching) {
-                Text(isWatching ? "Stop Watching" : "Start Watching")
+            Button(action: model.toggleWatching) {
+                Text(model.isWatching ? "Stop Watching" : "Start Watching")
                     .frame(width: 200)
             }
             .buttonStyle(.borderedProminent)
 
-            if isWatching {
+            if model.isWatching {
                 Text("Watching: ~/.copilot/session-state")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -38,14 +36,18 @@ struct ContentView: View {
             Divider()
 
             sessionListView
-        }
-        .frame(minWidth: 500, minHeight: 400)
-        .padding()
-        .task {
-            if !isWatching {
-                startWatching()
+
+            Divider()
+
+            HStack {
+                Spacer()
+                Button("Quit CopilotCompanion") {
+                    NSApplication.shared.terminate(nil)
+                }
             }
         }
+        .frame(width: 360, height: 480)
+        .padding()
     }
 
     private var headerView: some View {
@@ -55,10 +57,10 @@ struct ContentView: View {
 
             Spacer()
 
-            if !sessionsWaitingForUser.isEmpty {
+            if !model.sessionsWaitingForUser.isEmpty {
                 HStack(spacing: 4) {
                     Text("🔔")
-                    Text("\(sessionsWaitingForUser.count)")
+                    Text("\(model.sessionsWaitingForUser.count)")
                         .fontWeight(.bold)
                 }
                 .padding(.horizontal, 12)
@@ -73,10 +75,10 @@ struct ContentView: View {
     private var sessionListView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                if sessionsWaitingForUser.isEmpty {
+                if model.sessionsWaitingForUser.isEmpty {
                     emptyStateView
                 } else {
-                    ForEach(sessionsWaitingForUser) { session in
+                    ForEach(model.sessionsWaitingForUser) { session in
                         sessionCard(for: session)
                     }
                 }
@@ -93,7 +95,7 @@ struct ContentView: View {
             Text("No sessions waiting for your input")
                 .font(.headline)
                 .foregroundColor(.secondary)
-            if isWatching {
+            if model.isWatching {
                 Text("We'll update automatically when Copilot needs you")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -155,68 +157,6 @@ struct ContentView: View {
         )
     }
 
-    private func toggleWatching() {
-        if isWatching {
-            stopWatching()
-        } else {
-            startWatching()
-        }
-    }
-
-    private func startWatching() {
-        guard !isWatching else { return }
-        let fileManager = FileManager.default
-        let copilotConfigDirectory = fileManager.homeDirectoryForCurrentUser
-            .appending(path: ".copilot")
-            .appending(path: "session-state")
-
-        // Create directory if it doesn't exist
-        if !fileManager.fileExists(atPath: copilotConfigDirectory.path) {
-            do {
-                try fileManager.createDirectory(
-                    at: copilotConfigDirectory, withIntermediateDirectories: true)
-            } catch {
-                errorMessage = "Failed to create directory: \(error.localizedDescription)"
-                return
-            }
-        }
-
-        let manager = SessionManager(sessionStateDirectory: copilotConfigDirectory)
-        let folderWatcher = FolderWatcher(folderURL: copilotConfigDirectory)
-        let watcher = SessionWatcher(sessionManager: manager, folderWatcher: folderWatcher)
-
-        Task {
-            do {
-                try await watcher.startWatching { sessions in
-                    await MainActor.run {
-                        self.sessionsWaitingForUser = sessions
-                    }
-                }
-
-                await MainActor.run {
-                    self.sessionWatcher = watcher
-                    self.isWatching = true
-                    self.errorMessage = nil
-                }
-            } catch {
-                await MainActor.run {
-                    errorMessage = "Failed to start watching: \(error.localizedDescription)"
-                }
-            }
-        }
-    }
-
-    private func stopWatching() {
-        Task {
-            await sessionWatcher?.stopWatching()
-            await MainActor.run {
-                self.sessionWatcher = nil
-                self.isWatching = false
-                self.sessionsWaitingForUser = []
-            }
-        }
-    }
-
     private func formatDate(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.timeStyle = .medium
@@ -227,4 +167,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
+        .environmentObject(MenuBarModel(startWatchingOnInit: false))
 }

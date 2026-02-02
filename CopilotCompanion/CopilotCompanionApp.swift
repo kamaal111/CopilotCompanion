@@ -11,6 +11,6 @@ import CopilotCompanionApp
 @main
 struct CopilotCompanionApp: App {
     var body: some Scene {
-        CopilotCompanionWindowGroup()
+        CopilotCompanionMenuBarExtra()
     }
 }

@@ -41,6 +41,11 @@ struct ContentView: View {
         }
         .frame(minWidth: 500, minHeight: 400)
         .padding()
+        .task {
+            if !isWatching {
+                startWatching()
+            }
+        }
     }
 
     private var headerView: some View {
@@ -159,6 +164,7 @@ struct ContentView: View {
     }
 
     private func startWatching() {
+        guard !isWatching else { return }
         let fileManager = FileManager.default
         let copilotConfigDirectory = fileManager.homeDirectoryForCurrentUser
             .appending(path: ".copilot")
